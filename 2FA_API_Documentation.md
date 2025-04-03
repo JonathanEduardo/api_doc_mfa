@@ -13,69 +13,92 @@ Nota: El token debe enviarse directamente en el header Authorization, sin el pre
 
 ## Endpoints
 
-### 1. Obtener Estado 2FA
+### 1. Login con Estado 2FA
 ```http
-GET /api/status
+POST /api/user/auth
 ```
 
-**Response:**
+**Request:**
 ```json
 {
-    "has_2fa": false,        // true si 2FA está activado
-    "is_first_time": true,   // true si es primera vez activando 2FA
-    "is_mandatory": true     // true si 2FA es obligatorio
+    "employee_number": "52102889",
+    "password": "12345678@J",
+    "id_device": "test_device",
+    "device_os": "android/ios",
+    "languageId": 1
 }
 ```
 
-### 2. Generar Nuevo Secreto
+**Response:**
+La respuesta incluye toda la información del usuario y además los siguientes campos relacionados con 2FA:
+```json
+{
+    "statuscode": 0,
+    "statusmessage": "",
+    "resultset": {
+        // ... otros campos del usuario antiguos...
+        // nuevos valores que agregue
+        "has_2fa": false,        // true si el usuario tiene 2FA activado
+        "is_first_time": false,  // true si es la primera vez que configura 2FA
+        "is_mandatory": true     // true si 2FA es obligatorio para el usuario
+    }
+}
+```
+
+### 2. Generar o Recuperar Secret 2FA
 ```http
 POST /api/generate
 ```
 
-**Response:**
-```json
-{
-    "url": "otpauth://totp/KIA%20Contigo:52102889?secret=LC5RCZ3SIX6NRKQ7&issuer=KIA%20Contigo&algorithm=SHA1&digits=6&period=30"
-}
-```
-
-### 3. Obtener Código QR
-```http
-GET /api/qr-code
-```
+**Request:**
+No requiere cuerpo de petición (n/a)
 
 **Response:**
 ```json
 {
-    "qr_url": "otpauth://totp/KIA%20App:52102889?secret=LC5RCZ3SIX6NRKQ7&issuer=KIA%20App&algorithm=SHA1&digits=6&period=30"
+    "statuscode": 0,
+    "statusmessage": "OK",
+    "resultset": {
+        "secret": "BHR2URDQF7FUVYDG",   // Secret en texto plano para configurar en Google Authenticator
+        "is_new": false               // true si es un nuevo secret, false si ya existía
+    }
 }
 ```
 
-### 4. Validar Código
+**Notas:**
+- Si el usuario ya tiene un secret configurado, se retornará el mismo (is_new: false)
+- Si el usuario no tiene secret, se generará uno nuevo (is_new: true)
+- El secret debe ingresarse manualmente en Google Authenticator
+
+### 3. Validar Código
 ```http
 POST /api/validate
 ```
 
-**Request (raw):**
+**Request:**
 ```json
 {
-    "code": "632570"     // Código 2FA de 6 dígitos
+    "code": "883036"     // Código 2FA de 6 dígitos
 }
 ```
 
 **Response:**
 ```json
 {
-    "status": "success"  // Cuando el código es válido
+    "statuscode": 0,
+    "statusmessage": "OK",
+    "resultset": {
+        "status": "success"  // Cuando el código es válido
+    }
 }
 ```
 
-### 5. Desactivar 2FA
+### 4. Desactivar 2FA
 ```http
 POST /api/disable
 ```
 
-**Request (raw):**
+**Request:**
 ```json
 {
     "code": "034166"     // Código 2FA de 6 dígitos para confirmar
@@ -85,7 +108,11 @@ POST /api/disable
 **Response:**
 ```json
 {
-    "status": "success"  // Cuando se desactivó correctamente
+    "statuscode": 0,
+    "statusmessage": "OK",
+    "resultset": {
+        "status": "success"  // Cuando se desactivó correctamente
+    }
 }
 ```
 
@@ -94,79 +121,89 @@ POST /api/disable
 Todos los endpoints pueden devolver los siguientes errores:
 
 ```json
-// Error 401 - Token inválido
+// Error de autenticación - Usuario inválido
 {
     "statuscode": 4,
     "statusmessage": "Invalid user",
     "resultset": []
 }
 
-// Error 404 - Usuario no encontrado
+// Error de servidor
 {
-    "error": "User not found"
+    "statuscode": 2,
+    "statusmessage": "Server error",
+    "resultset": []
 }
 ```
 
 ### Errores Específicos por Endpoint
 
+#### Generar Secret (/api/generate)
+```json
+// Error de servidor al generar secret
+{
+    "statuscode": 2,
+    "statusmessage": "Server error",
+    "resultset": []
+}
+```
+
 #### Validar Código (/api/validate)
 ```json
-// Error 400 - 2FA no configurado
+// Error - 2FA no configurado
 {
-    "error": "2FA is not configured"
+    "statuscode": 1,
+    "statusmessage": "2FA is not configured",
+    "resultset": []
 }
 
-// Error 422 - Código inválido
+// Error - Código inválido
 {
-    "error": "Invalid code"
+    "statuscode": 1,
+    "statusmessage": "Invalid verification code",
+    "resultset": []
 }
 
-// Error 500 - Error interno
+// Error de servidor
 {
-    "error": "Error validating code"
+    "statuscode": 2,
+    "statusmessage": "Server error",
+    "resultset": []
 }
 
 // Error de validación
 {
-    "message": "The code field is required.",
-    "errors": {
-        "code": [
-            "The code field is required."
-        ]
-    }
+    "statuscode": 1,
+    "statusmessage": "The code field is required",
+    "resultset": []
 }
 ```
 
 #### Desactivar 2FA (/api/disable)
 ```json
-// Error 400 - 2FA no configurado
+// Error - 2FA no configurado
 {
-    "error": "2FA is not configured"
+    "statuscode": 1,
+    "statusmessage": "2FA is not configured",
+    "resultset": []
 }
 
-// Error 422 - Código inválido
+// Error - Código inválido
 {
-    "error": "Invalid code"
+    "statuscode": 1,
+    "statusmessage": "Invalid verification code",
+    "resultset": []
 }
 
-// Error 500 - Error interno
+// Error de servidor
 {
-    "error": "Error validating code"
+    "statuscode": 2,
+    "statusmessage": "Server error",
+    "resultset": []
 }
 ```
 
-#### Obtener Código QR (/api/qr-code)
-```json
-// Error 400 - 2FA no configurado
-{
-    "error": "2FA not enabled for this user"
-}
 
-// Error 500 - Error interno
-{
-    "error": "Error processing 2FA secret"
-}
-```
 
 ## Notas de Seguridad
 
